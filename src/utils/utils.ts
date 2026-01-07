@@ -143,6 +143,35 @@ async function exitFullscreen() {
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Retries an async function with exponential backoff
+ * @param fn - Function to retry
+ * @param maxRetries - Maximum number of retries (default 3)
+ * @param baseDelay - Base delay in ms (default 100)
+ * @param shouldRetry - Optional function to determine if retry should happen based on error
+ * @returns Result of fn or throws last error
+ */
+async function retry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 100,
+  shouldRetry?: (error: unknown) => boolean,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxRetries) break;
+      if (shouldRetry && !shouldRetry(error)) break;
+      const delay = baseDelay * Math.pow(2, attempt);
+      await sleep(delay);
+    }
+  }
+  throw lastError;
+}
+
 function timeout(ms: number, message = "Operation timed out"): Promise<never> {
   return new Promise((_, reject) => {
     setTimeout(() => reject(new Error(message)), ms);
@@ -243,6 +272,7 @@ export {
   toFlatObj,
   exitFullscreen,
   sleep,
+  retry,
   timeout,
   waitForCondition,
   downloadTranslation,

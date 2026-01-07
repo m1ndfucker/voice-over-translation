@@ -65,6 +65,26 @@ export class VOTVideoManager {
       localizedTitle,
       downloadTitle: localizedTitle ?? title ?? videoId,
     };
+
+    debug.log("[VOT] getVideoData result:", {
+      videoId,
+      url,
+      host,
+      title: title?.substring(0, 50),
+      detectedLanguage,
+      isStream,
+      duration,
+    });
+
+    if (!videoId) {
+      console.warn(
+        "[VOT] Video ID not found. URL:",
+        window.location.href,
+        "Host:",
+        host,
+      );
+    }
+
     console.log("[VOT] Detected language:", detectedLanguage);
     // For certain hosts, force a default language.
     if (["rutube", "ok.ru", "mail_ru"].includes(this.videoHandler.site.host)) {
@@ -81,7 +101,21 @@ export class VOTVideoManager {
   }
 
   videoValidator() {
-    if (!this.videoHandler.videoData || !this.videoHandler.data) {
+    if (!this.videoHandler.data) {
+      debug.log("VideoValidator failed: settings not loaded");
+      throw new VOTLocalizedError("VOTNoVideoIDFound");
+    }
+
+    if (!this.videoHandler.videoData) {
+      debug.log("VideoValidator failed: videoData is undefined");
+      throw new VOTLocalizedError("VOTNoVideoIDFound");
+    }
+
+    if (!this.videoHandler.videoData.videoId) {
+      debug.log(
+        "VideoValidator failed: videoId is empty, videoData:",
+        this.videoHandler.videoData,
+      );
       throw new VOTLocalizedError("VOTNoVideoIDFound");
     }
 

@@ -3449,7 +3449,7 @@
 			}
 			let h = makeInt64Support();
 			function makeInt64Support() {
-				let d = new DataView(new ArrayBuffer(8)), f = typeof BigInt == "function" && typeof d.getBigInt64 == "function" && typeof d.getBigUint64 == "function" && typeof d.setBigInt64 == "function" && typeof d.setBigUint64 == "function" && (typeof process != "object" || typeof process.env != "object" || process.env.BUF_BIGINT_DISABLE !== "1");
+				let d = new DataView(new ArrayBuffer(8)), f = typeof BigInt == "function" && typeof d.getBigInt64 == "function" && typeof d.getBigUint64 == "function" && typeof d.setBigInt64 == "function" && typeof d.setBigUint64 == "function" && (!!globalThis.Deno || typeof process != "object" || typeof process.env != "object" || process.env.BUF_BIGINT_DISABLE !== "1");
 				if (f) {
 					let f = BigInt("-9223372036854775808"), p = BigInt("9223372036854775807"), m = BigInt("0"), h = BigInt("18446744073709551615");
 					return {
@@ -3733,7 +3733,7 @@
 			function assertFloat32(d) {
 				if (typeof d == "string") {
 					let f = d;
-					if (d = Number(d), isNaN(d) && f !== "NaN") throw Error("invalid float32: " + f);
+					if (d = Number(d), Number.isNaN(d) && f !== "NaN") throw Error("invalid float32: " + f);
 				} else if (typeof d != "number") throw Error("invalid float32: " + typeof d);
 				if (Number.isFinite(d) && (d > v || d < b)) throw Error("invalid float32: " + d);
 			}
@@ -8163,7 +8163,15 @@
 								localizedTitle: D,
 								downloadTitle: D ?? v ?? p
 							};
-							if (console.log("[VOT] Detected language:", U), [
+							if (C.A.log("[VOT] getVideoData result:", {
+								videoId: p,
+								url: f,
+								host: m,
+								title: v?.substring(0, 50),
+								detectedLanguage: U,
+								isStream: F,
+								duration: d
+							}), p || console.warn("[VOT] Video ID not found. URL:", window.location.href, "Host:", m), console.log("[VOT] Detected language:", U), [
 								"rutube",
 								"ok.ru",
 								"mail_ru"
@@ -8176,7 +8184,9 @@
 							return W;
 						}
 						videoValidator() {
-							if (!this.videoHandler.videoData || !this.videoHandler.data) throw new x.n("VOTNoVideoIDFound");
+							if (!this.videoHandler.data) throw C.A.log("VideoValidator failed: settings not loaded"), new x.n("VOTNoVideoIDFound");
+							if (!this.videoHandler.videoData) throw C.A.log("VideoValidator failed: videoData is undefined"), new x.n("VOTNoVideoIDFound");
+							if (!this.videoHandler.videoData.videoId) throw C.A.log("VideoValidator failed: videoId is empty, videoData:", this.videoHandler.videoData), new x.n("VOTNoVideoIDFound");
 							if (C.A.log("VideoValidator videoData: ", this.videoHandler.videoData), this.videoHandler.data.enabledDontTranslateLanguages && this.videoHandler.data.dontTranslateLanguages?.includes(this.videoHandler.videoData.detectedLanguage)) throw new x.n("VOTDisableFromYourLang");
 							if (this.videoHandler.site.host === "twitch" && this.videoHandler.videoData.isStream) throw new x.n("VOTStreamNotAvailable");
 							if (!this.videoHandler.videoData.isStream && this.videoHandler.videoData.duration > 14400) throw new x.n("VOTVideoIsTooLong");
@@ -8424,15 +8434,45 @@
 							}), ["rutube", "ok"].includes(this.site.host) || addExtraEventListener(this.video, "volumechange", () => {
 								this.syncVideoVolumeSlider();
 							}), this.site.host === "youtube" && !this.site.additionalData && addExtraEventListener(document, "yt-page-data-updated", async () => {
-								F.A.log("yt-page-data-updated"), window.location.pathname.includes("/shorts/") && await this.setCanPlay();
+								F.A.log("yt-page-data-updated", window.location.pathname), await this.setCanPlay();
 							});
 						}
+						async waitForYouTubePlayerReady() {
+							if (this.site.host !== "youtube") return !0;
+							let d = 10, f = 200;
+							for (let p = 0; p < d; p++) {
+								let d = g.A.getPlayer();
+								if (d) {
+									let m = d.getVideoData?.(), h = d.getVideoUrl?.();
+									if (m?.video_id || h) return F.A.log("YouTube player ready after", p * f, "ms"), !0;
+								}
+								await (0, q.yy)(f);
+							}
+							return F.A.log("YouTube player ready timeout"), !1;
+						}
 						async setCanPlay() {
-							let d = await (0, _.jY)(this.site, {
-								fetchFn: U.G3,
-								video: this.video
-							});
-							this.videoData && d === this.videoData.videoId || (await this.handleSrcChanged(), await this.autoTranslate(), F.A.log("lipsync mode is canplay"));
+							await this.waitForYouTubePlayerReady();
+							let d;
+							try {
+								d = await (0, q.L5)(async () => {
+									let d = await (0, _.jY)(this.site, {
+										fetchFn: U.G3,
+										video: this.video
+									});
+									if (!d && this.site.host === "youtube") {
+										let d = g.A.getPlayer(), f = d?.getVideoData?.()?.video_id;
+										if (f) return F.A.log("Got video ID from YouTube player API:", f), f;
+										throw Error("Video ID not yet available");
+									}
+									return d;
+								}, 3, 200, (d) => d?.message === "Video ID not yet available");
+							} catch (f) {
+								F.A.log("Failed to get video ID after retries:", f), d = await (0, _.jY)(this.site, {
+									fetchFn: U.G3,
+									video: this.video
+								});
+							}
+							this.videoData && d === this.videoData.videoId || (await this.handleSrcChanged(), await this.autoTranslate(), F.A.log("lipsync mode is canplay, videoId:", d));
 						}
 						resetTimer = () => {
 							clearTimeout(this.timer), this.uiManager.votOverlayView.updateButtonOpacity(1), this.timer = setTimeout(() => {
@@ -12269,6 +12309,7 @@
 						Eh: () => exitFullscreen,
 						GW: () => toFlatObj,
 						HD: () => T,
+						L5: () => retry,
 						Le: () => clearFileName,
 						MR: () => downloadTranslation,
 						R5: () => E,
@@ -12279,7 +12320,8 @@
 						dJ: () => getHeaders,
 						lg: () => getTimestamp,
 						qE: () => clamp,
-						wR: () => timeout
+						wR: () => timeout,
+						yy: () => sleep
 					});
 					var h = p("./node_modules/bowser/es5.js"), g = p.n(h), _ = p("./node_modules/browser-id3-writer/dist/browser-id3-writer.mjs"), v = p("./node_modules/@vot.js/shared/dist/data/consts.js"), b = p("./src/utils/localization.ts"), x = d([b]);
 					b = (x.then ? (await x)() : x)[0];
@@ -12338,6 +12380,17 @@
 						(d.fullscreenElement || d.webkitFullscreenElement) && (d.webkitExitFullscreen && await d.webkitExitFullscreen(), d.exitFullscreen && await d.exitFullscreen());
 					}
 					let sleep = (d) => new Promise((f) => setTimeout(f, d));
+					async function retry(d, f = 3, p = 100, m) {
+						let h;
+						for (let g = 0; g <= f; g++) try {
+							return await d();
+						} catch (d) {
+							if (h = d, g === f || m && !m(d)) break;
+							let _ = p * 2 ** g;
+							await sleep(_);
+						}
+						throw h;
+					}
 					function timeout(d, f = "Operation timed out") {
 						return new Promise((p, m) => {
 							setTimeout(() => m(Error(f)), d);

@@ -35,7 +35,13 @@ import {
 import { IFRAME_HASH, isIframe } from "./utils/iframeConnector.ts";
 import { updateConfig, votStorage } from "./utils/storage.ts";
 import { translate } from "./utils/translateApis.ts";
-import { browserInfo, calculatedResLang, initHls } from "./utils/utils.ts";
+import {
+  browserInfo,
+  calculatedResLang,
+  initHls,
+  retry,
+  sleep,
+} from "./utils/utils.ts";
 import { VideoObserver } from "./utils/VideoObserver.js";
 import { VOTLocalizedError } from "./utils/VOTLocalizedError.js";
 import { syncVolume } from "./utils/volume.ts";
@@ -553,28 +559,90 @@ class VideoHandler {
     }
     if (this.site.host === "youtube" && !this.site.additionalData) {
       addExtraEventListener(document, "yt-page-data-updated", async () => {
-        debug.log("yt-page-data-updated");
-        // fix #802
-        if (!window.location.pathname.includes("/shorts/")) return;
+        debug.log("yt-page-data-updated", window.location.pathname);
+        // Handle all YouTube video navigations (watch, shorts, live, embed)
         await this.setCanPlay();
       });
     }
   }
 
   /**
+   * Waits for YouTube player to be ready (has video data available)
+   * @returns {Promise<boolean>} true if player is ready, false if timeout
+   */
+  async waitForYouTubePlayerReady() {
+    if (this.site.host !== "youtube") return true;
+
+    const maxAttempts = 10;
+    const delayMs = 200;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      const player = YoutubeHelper.getPlayer();
+      if (player) {
+        // Check if player has video data available
+        const videoData = player.getVideoData?.();
+        const videoUrl = player.getVideoUrl?.();
+        if (videoData?.video_id || videoUrl) {
+          debug.log("YouTube player ready after", i * delayMs, "ms");
+          return true;
+        }
+      }
+      await sleep(delayMs);
+    }
+
+    debug.log("YouTube player ready timeout");
+    return false;
+  }
+
+  /**
    * Called when the video can play.
    */
   async setCanPlay() {
-    const videoId = await getVideoID(this.site, {
-      fetchFn: GM_fetch,
-      video: this.video,
-    });
+    // Wait for YouTube player to be ready before trying to get video ID
+    await this.waitForYouTubePlayerReady();
+
+    // Try to get video ID with retry mechanism for race conditions
+    let videoId;
+    try {
+      videoId = await retry(
+        async () => {
+          const id = await getVideoID(this.site, {
+            fetchFn: GM_fetch,
+            video: this.video,
+          });
+          if (!id && this.site.host === "youtube") {
+            // For YouTube, if we couldn't get ID, try from player directly
+            const player = YoutubeHelper.getPlayer();
+            const playerVideoId = player?.getVideoData?.()?.video_id;
+            if (playerVideoId) {
+              debug.log("Got video ID from YouTube player API:", playerVideoId);
+              return playerVideoId;
+            }
+            throw new Error("Video ID not yet available");
+          }
+          return id;
+        },
+        3, // max 3 retries
+        200, // 200ms base delay
+        (error) => {
+          // Only retry if it's a "not yet available" error
+          return error?.message === "Video ID not yet available";
+        },
+      );
+    } catch (err) {
+      debug.log("Failed to get video ID after retries:", err);
+      videoId = await getVideoID(this.site, {
+        fetchFn: GM_fetch,
+        video: this.video,
+      });
+    }
+
     if (this.videoData && videoId === this.videoData.videoId) {
       return;
     }
     await this.handleSrcChanged();
     await this.autoTranslate();
-    debug.log("lipsync mode is canplay");
+    debug.log("lipsync mode is canplay, videoId:", videoId);
   }
 
   /**
