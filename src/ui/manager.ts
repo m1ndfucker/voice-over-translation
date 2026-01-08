@@ -192,6 +192,12 @@ export class UIManager {
           : `subtitles_${this.videoHandler.videoData.videoId}`;
         downloadBlob(blob, `${filename}.${subsFormat}`);
       })
+      .addEventListener("click:errorDetails", () => {
+        if (!this.videoHandler) {
+          return;
+        }
+        this.videoHandler.showErrorDetails();
+      })
       .addEventListener("input:videoVolume", (volume) => {
         if (!this.videoHandler) {
           return;
@@ -419,13 +425,6 @@ export class UIManager {
       debug.log(
         "[handleTranslationBtnClick] translationBtn isn't in none state",
       );
-      // If button is in error state and we have error details, show them on double-click
-      if (
-        this.votOverlayView.votButton.status === "error" &&
-        this.videoHandler.lastError
-      ) {
-        this.videoHandler.showErrorDetails();
-      }
       this.videoHandler.actionsAbortController.abort();
       this.videoHandler.stopTranslation();
       return this;

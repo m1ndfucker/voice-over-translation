@@ -891,6 +891,7 @@ class VideoHandler {
     this.downloadTranslationUrl = null;
     this.longWaitingResCount = 0;
     this.lastError = undefined; // Clear error when stopping translation
+    this.uiManager.votOverlayView.errorDetailsButton.hidden = true; // Hide error details button
     this.transformBtn("none", localizationProvider.get("translateVideo"));
     debug.log(`Volume on start: ${this.volumeOnStart}`);
     if (this.volumeOnStart) {
@@ -925,6 +926,8 @@ class VideoHandler {
     // Store error for details view (only real errors, not status messages)
     if (!isStatusMessage) {
       this.lastError = errorMessage;
+      // Show error details button when there's a real error
+      this.uiManager.votOverlayView.errorDetailsButton.hidden = false;
     }
 
     this.longWaitingResCount =

@@ -196,6 +196,9 @@ export class VOTTranslationHandler {
         return null;
       }
 
+      // Store full error object for details view
+      this.videoHandler.lastError = err as Error;
+
       await this.videoHandler.updateTranslationErrorMsg(
         (err as any).data?.message ?? err,
       );
@@ -289,6 +292,9 @@ export class VOTTranslationHandler {
         debug.log("aborted stream translation");
         return null;
       }
+
+      // Store full error object for details view
+      this.videoHandler.lastError = err as Error;
 
       console.error("[VOT] Failed to translate stream", err);
       await this.videoHandler.updateTranslationErrorMsg(

@@ -8078,7 +8078,7 @@
 								}
 							} catch (m) {
 								if (m.message === "AbortError") return v.A.log("aborted video translation"), null;
-								await this.videoHandler.updateTranslationErrorMsg(m.data?.message ?? m), console.error("[VOT]", m);
+								this.videoHandler.lastError = m, await this.videoHandler.updateTranslationErrorMsg(m.data?.message ?? m), console.error("[VOT]", m);
 								let h = `${d.videoId}_${f}_${p}_${this.videoHandler.data?.useLivelyVoice}`;
 								return this.videoHandler.cacheManager.setTranslation(h, { error: m }), null;
 							}
@@ -8109,7 +8109,7 @@
 									v.A.log("Ping stream translation", h.pingId), this.videoHandler.votClient.pingStream({ pingId: h.pingId });
 								}, h.interval * 1e3), h;
 							} catch (d) {
-								return d.message === "AbortError" ? (v.A.log("aborted stream translation"), null) : (console.error("[VOT] Failed to translate stream", d), await this.videoHandler.updateTranslationErrorMsg(d.data?.message ?? d), null);
+								return d.message === "AbortError" ? (v.A.log("aborted stream translation"), null) : (this.videoHandler.lastError = d, console.error("[VOT] Failed to translate stream", d), await this.videoHandler.updateTranslationErrorMsg(d.data?.message ?? d), null);
 							}
 						}
 					}
@@ -8561,7 +8561,7 @@
 							return this.videoManager.videoValidator();
 						}
 						stopTranslate() {
-							this.audioPlayer.player.removeVideoEvents(), this.audioPlayer.player.clear(), this.audioPlayer.player.src = void 0, F.A.log("audioPlayer after stopTranslate", this.audioPlayer), this.uiManager.votOverlayView.videoVolumeSlider.hidden = !0, this.uiManager.votOverlayView.translationVolumeSlider.hidden = !0, this.uiManager.votOverlayView.downloadTranslationButton.hidden = !0, this.downloadTranslationUrl = null, this.longWaitingResCount = 0, this.lastError = void 0, this.transformBtn("none", D.j.get("translateVideo")), F.A.log(`Volume on start: ${this.volumeOnStart}`), this.volumeOnStart && this.setVideoVolume(this.volumeOnStart), clearInterval(this.streamPing), clearTimeout(this.autoRetry), this.hls?.destroy(), this.firstSyncVolume = !0, this.actionsAbortController = new AbortController();
+							this.audioPlayer.player.removeVideoEvents(), this.audioPlayer.player.clear(), this.audioPlayer.player.src = void 0, F.A.log("audioPlayer after stopTranslate", this.audioPlayer), this.uiManager.votOverlayView.videoVolumeSlider.hidden = !0, this.uiManager.votOverlayView.translationVolumeSlider.hidden = !0, this.uiManager.votOverlayView.downloadTranslationButton.hidden = !0, this.downloadTranslationUrl = null, this.longWaitingResCount = 0, this.lastError = void 0, this.uiManager.votOverlayView.errorDetailsButton.hidden = !0, this.transformBtn("none", D.j.get("translateVideo")), F.A.log(`Volume on start: ${this.volumeOnStart}`), this.volumeOnStart && this.setVideoVolume(this.volumeOnStart), clearInterval(this.streamPing), clearTimeout(this.autoRetry), this.hls?.destroy(), this.firstSyncVolume = !0, this.actionsAbortController = new AbortController();
 						}
 						async updateTranslationErrorMsg(d) {
 							let f = D.j.get("translationTake"), p = D.j.lang, m = [
@@ -8570,7 +8570,7 @@
 								"Ожидаем перевод видео",
 								"Загружаем переведенное аудио"
 							], h = typeof d == "string" && m.includes(d);
-							if (h || (this.lastError = d), this.longWaitingResCount = d === D.j.get("translationTakeAboutMinute") ? this.longWaitingResCount + 1 : 0, F.A.log("longWaitingResCount", this.longWaitingResCount), this.longWaitingResCount > x.px && (d = new Y.n("TranslationDelayed"), this.lastError = d), F.A.log("updateTranslationErrorMsg message", d), d?.name === "VOTLocalizedError") this.transformBtn("error", d.localizedMessage);
+							if (h || (this.lastError = d, this.uiManager.votOverlayView.errorDetailsButton.hidden = !1), this.longWaitingResCount = d === D.j.get("translationTakeAboutMinute") ? this.longWaitingResCount + 1 : 0, F.A.log("longWaitingResCount", this.longWaitingResCount), this.longWaitingResCount > x.px && (d = new Y.n("TranslationDelayed"), this.lastError = d), F.A.log("updateTranslationErrorMsg message", d), d?.name === "VOTLocalizedError") this.transformBtn("error", d.localizedMessage);
 							else if (d instanceof Error) this.transformBtn("error", d?.message);
 							else if (this.data.translateAPIErrors && p !== "ru" && !d?.includes(f)) {
 								this.uiManager.votOverlayView.votButton.loading = !0;
@@ -10772,6 +10772,8 @@
 								if (!this.videoHandler || !this.videoHandler.yandexSubtitles || !this.videoHandler.videoData) return;
 								let d = this.data.subtitlesDownloadFormat ?? "json", f = (0, h.vk)(this.videoHandler.yandexSubtitles, d), p = new Blob([d === "json" ? JSON.stringify(f) : f], { type: "text/plain" }), m = this.data.downloadWithName ? (0, T.Le)(this.videoHandler.videoData.downloadTitle) : `subtitles_${this.videoHandler.videoData.videoId}`;
 								(0, T.WN)(p, `${m}.${d}`);
+							}).addEventListener("click:errorDetails", () => {
+								this.videoHandler && this.videoHandler.showErrorDetails();
 							}).addEventListener("input:videoVolume", (d) => {
 								this.videoHandler && (this.videoHandler.setVideoVolume(d / 100), this.data.syncVolume && this.videoHandler.syncVolumeWrapper("video", d));
 							}).addEventListener("input:translationVolume", () => {
@@ -10836,7 +10838,7 @@
 							if (!this.votOverlayView?.isInitialized()) throw Error("[VOT] OverlayView isn't initialized");
 							if (!this.videoHandler) return this;
 							if (x.A.log("[handleTranslationBtnClick] click translationBtn"), this.videoHandler.hasActiveSource()) return x.A.log("[handleTranslationBtnClick] video has active source"), this.videoHandler.stopTranslation(), this;
-							if (this.votOverlayView.votButton.status !== "none" || this.votOverlayView.votButton.loading) return x.A.log("[handleTranslationBtnClick] translationBtn isn't in none state"), this.votOverlayView.votButton.status === "error" && this.videoHandler.lastError && this.videoHandler.showErrorDetails(), this.videoHandler.actionsAbortController.abort(), this.videoHandler.stopTranslation(), this;
+							if (this.votOverlayView.votButton.status !== "none" || this.votOverlayView.votButton.loading) return x.A.log("[handleTranslationBtnClick] translationBtn isn't in none state"), this.videoHandler.actionsAbortController.abort(), this.videoHandler.stopTranslation(), this;
 							try {
 								if (x.A.log("[handleTranslationBtnClick] trying execute translation"), !this.videoHandler.videoData?.videoId) throw new b.n("VOTNoVideoIDFound");
 								(this.videoHandler.site.host === "vk" && this.videoHandler.site.additionalData === "clips" || this.videoHandler.site.host === "douyin") && (this.videoHandler.videoData = await this.videoHandler.getVideoData()), x.A.log("[handleTranslationBtnClick] Run translateFunc", this.videoHandler.videoData.videoId), await this.videoHandler.translateFunc(this.videoHandler.videoData.videoId, this.videoHandler.videoData.isStream, this.videoHandler.videoData.detectedLanguage, this.videoHandler.videoData.responseLanguage, this.videoHandler.videoData.translationHelp);
@@ -10908,6 +10910,7 @@
 						onClickTranslate = new O.Z();
 						onClickDownloadTranslation = new O.Z();
 						onClickDownloadSubtitles = new O.Z();
+						onClickErrorDetails = new O.Z();
 						onSelectFromLanguage = new O.Z();
 						onSelectToLanguage = new O.Z();
 						onSelectSubtitles = new O.Z();
@@ -10919,6 +10922,7 @@
 						votMenu;
 						downloadTranslationButton;
 						downloadSubtitlesButton;
+						errorDetailsButton;
 						openSettingsButton;
 						languagePairSelect;
 						subtitlesSelectLabel;
@@ -10955,6 +10959,9 @@
 									break;
 								case "click:downloadSubtitles":
 									this.onClickDownloadSubtitles.addListener(f);
+									break;
+								case "click:errorDetails":
+									this.onClickErrorDetails.addListener(f);
 									break;
 								case "click:translate":
 									this.onClickTranslate.addListener(f);
@@ -11032,7 +11039,7 @@
 							}), this.votMenu = new T.A({
 								titleHtml: A.j.get("VOTSettings"),
 								position: f
-							}), this.root.appendChild(this.votMenu.container), this.downloadTranslationButton = new U.A(), this.downloadTranslationButton.hidden = !0, this.downloadSubtitlesButton = g.A.createIconButton(E.U0), this.downloadSubtitlesButton.hidden = !0, this.openSettingsButton = g.A.createIconButton(E.c1), this.votMenu.headerContainer.append(this.downloadTranslationButton.button, this.downloadSubtitlesButton, this.openSettingsButton);
+							}), this.root.appendChild(this.votMenu.container), this.downloadTranslationButton = new U.A(), this.downloadTranslationButton.hidden = !0, this.downloadSubtitlesButton = g.A.createIconButton(E.U0), this.downloadSubtitlesButton.hidden = !0, this.errorDetailsButton = g.A.createIconButton(E.Xd), this.errorDetailsButton.hidden = !0, this.errorDetailsButton.title = A.j.get("VOTBugReport"), this.openSettingsButton = g.A.createIconButton(E.c1), this.votMenu.headerContainer.append(this.downloadTranslationButton.button, this.downloadSubtitlesButton, this.errorDetailsButton, this.openSettingsButton);
 							let m = this.videoHandler?.videoData?.detectedLanguage ?? "en", O = this.data.responseLanguage ?? "ru";
 							this.languagePairSelect = new _.A({
 								from: {
@@ -11098,6 +11105,8 @@
 								this.onClickDownloadTranslation.dispatch();
 							}), this.downloadSubtitlesButton.addEventListener("click", async () => {
 								this.onClickDownloadSubtitles.dispatch();
+							}), this.errorDetailsButton.addEventListener("click", async () => {
+								this.onClickErrorDetails.dispatch();
 							}), this.openSettingsButton.addEventListener("click", async () => {
 								this.onClickSettings.dispatch();
 							}), this.languagePairSelect.fromSelect.addEventListener("selectItem", (d) => {

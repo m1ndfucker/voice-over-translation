@@ -10,7 +10,7 @@ import SliderLabel from "../components/sliderLabel";
 import Tooltip from "../components/tooltip";
 import VOTButton from "../components/votButton";
 import VOTMenu from "../components/votMenu";
-import { SETTINGS_ICON, SUBTITLES_ICON } from "./../icons";
+import { SETTINGS_ICON, SUBTITLES_ICON, WARNING_ICON } from "./../icons";
 
 import type { VideoHandler } from "../..";
 import { maxAudioVolume } from "../../config/config";
@@ -44,6 +44,7 @@ export class OverlayView {
   private onClickTranslate = new EventImpl();
   private onClickDownloadTranslation = new EventImpl();
   private onClickDownloadSubtitles = new EventImpl();
+  private onClickErrorDetails = new EventImpl();
   private onSelectFromLanguage = new EventImpl();
   private onSelectToLanguage = new EventImpl();
   private onSelectSubtitles = new EventImpl();
@@ -59,6 +60,7 @@ export class OverlayView {
   votMenu?: VOTMenu;
   downloadTranslationButton?: DownloadButton;
   downloadSubtitlesButton?: HTMLElement;
+  errorDetailsButton?: HTMLElement;
   openSettingsButton?: HTMLElement;
   languagePairSelect?: LanguagePairSelect<RequestLang, ResponseLang>;
   subtitlesSelectLabel?: Label;
@@ -96,6 +98,7 @@ export class OverlayView {
     votMenu: VOTMenu;
     downloadTranslationButton: DownloadButton;
     downloadSubtitlesButton: HTMLElement;
+    errorDetailsButton: HTMLElement;
     openSettingsButton: HTMLElement;
     languagePairSelect: LanguagePairSelect<RequestLang, ResponseLang>;
     subtitlesSelectLabel: Label;
@@ -130,6 +133,7 @@ export class OverlayView {
     listener: () => void,
   ): this;
   addEventListener(type: "click:downloadSubtitles", listener: () => void): this;
+  addEventListener(type: "click:errorDetails", listener: () => void): this;
   addEventListener(type: "click:translate", listener: () => void): this;
   addEventListener(
     type: "input:videoVolume",
@@ -157,6 +161,7 @@ export class OverlayView {
       | "click:pip"
       | "click:downloadTranslation"
       | "click:downloadSubtitles"
+      | "click:errorDetails"
       | "click:translate"
       | "input:videoVolume"
       | "input:translationVolume"
@@ -180,6 +185,10 @@ export class OverlayView {
       }
       case "click:downloadSubtitles": {
         this.onClickDownloadSubtitles.addListener(listener);
+        break;
+      }
+      case "click:errorDetails": {
+        this.onClickErrorDetails.addListener(listener);
         break;
       }
       case "click:translate": {
@@ -353,11 +362,16 @@ export class OverlayView {
     this.downloadSubtitlesButton = ui.createIconButton(SUBTITLES_ICON);
     this.downloadSubtitlesButton.hidden = true;
 
+    this.errorDetailsButton = ui.createIconButton(WARNING_ICON);
+    this.errorDetailsButton.hidden = true;
+    this.errorDetailsButton.title = localizationProvider.get("VOTBugReport");
+
     this.openSettingsButton = ui.createIconButton(SETTINGS_ICON);
 
     this.votMenu.headerContainer.append(
       this.downloadTranslationButton.button,
       this.downloadSubtitlesButton,
+      this.errorDetailsButton,
       this.openSettingsButton,
     );
 
@@ -512,6 +526,10 @@ export class OverlayView {
 
     this.downloadSubtitlesButton.addEventListener("click", async () => {
       this.onClickDownloadSubtitles.dispatch();
+    });
+
+    this.errorDetailsButton.addEventListener("click", async () => {
+      this.onClickErrorDetails.dispatch();
     });
 
     this.openSettingsButton.addEventListener("click", async () => {
