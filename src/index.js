@@ -88,6 +88,8 @@ class VideoHandler {
   firstSyncVolume = true; // used for skip 1st syncing with observer
   longWaitingResCount = 0;
   subtitles = []; // current subtitle list
+  /** @type {Error|string|undefined} */
+  lastError = undefined; // store last translation error for details view
 
   /**
    * Constructs a new VideoHandler instance.
@@ -888,6 +890,7 @@ class VideoHandler {
     this.uiManager.votOverlayView.downloadTranslationButton.hidden = true;
     this.downloadTranslationUrl = null;
     this.longWaitingResCount = 0;
+    this.lastError = undefined; // Clear error when stopping translation
     this.transformBtn("none", localizationProvider.get("translateVideo"));
     debug.log(`Volume on start: ${this.volumeOnStart}`);
     if (this.volumeOnStart) {
@@ -907,6 +910,23 @@ class VideoHandler {
   async updateTranslationErrorMsg(errorMessage) {
     const translationTake = localizationProvider.get("translationTake");
     const lang = localizationProvider.lang;
+
+    // Status messages that are not actual errors
+    const statusMessages = [
+      "Подготавливаем перевод",
+      "Видео передано в обработку",
+      "Ожидаем перевод видео",
+      "Загружаем переведенное аудио",
+    ];
+
+    const isStatusMessage =
+      typeof errorMessage === "string" && statusMessages.includes(errorMessage);
+
+    // Store error for details view (only real errors, not status messages)
+    if (!isStatusMessage) {
+      this.lastError = errorMessage;
+    }
+
     this.longWaitingResCount =
       errorMessage === localizationProvider.get("translationTakeAboutMinute")
         ? this.longWaitingResCount + 1
@@ -914,6 +934,7 @@ class VideoHandler {
     debug.log("longWaitingResCount", this.longWaitingResCount);
     if (this.longWaitingResCount > minLongWaitingCount) {
       errorMessage = new VOTLocalizedError("TranslationDelayed");
+      this.lastError = errorMessage;
     }
     debug.log("updateTranslationErrorMsg message", errorMessage);
     if (errorMessage?.name === "VOTLocalizedError") {
@@ -931,15 +952,63 @@ class VideoHandler {
     } else {
       this.transformBtn("error", errorMessage);
     }
-    if (
-      [
-        "Подготавливаем перевод",
-        "Видео передано в обработку",
-        "Ожидаем перевод видео",
-        "Загружаем переведенное аудио",
-      ].includes(errorMessage)
-    ) {
+    if (isStatusMessage) {
       this.uiManager.votOverlayView.votButton.loading = true;
+    }
+  }
+
+  /**
+   * Shows error details in a dialog/alert
+   */
+  showErrorDetails() {
+    if (!this.lastError) {
+      return;
+    }
+
+    let details = "";
+    if (this.lastError instanceof Error) {
+      details = `Error: ${this.lastError.name}\nMessage: ${this.lastError.message}`;
+      if (this.lastError.stack) {
+        details += `\n\nStack trace:\n${this.lastError.stack}`;
+      }
+      // Include additional data if available (VOTJSError often has .data)
+      if (this.lastError.data) {
+        details += `\n\nAdditional data:\n${JSON.stringify(this.lastError.data, null, 2)}`;
+      }
+    } else {
+      details = `Error: ${this.lastError}`;
+    }
+
+    // Add video context
+    if (this.videoData) {
+      details += `\n\n--- Video Info ---`;
+      details += `\nURL: ${window.location.href}`;
+      details += `\nVideo ID: ${this.videoData.videoId || "N/A"}`;
+      details += `\nHost: ${this.videoData.host || "N/A"}`;
+      details += `\nDetected language: ${this.videoData.detectedLanguage || "N/A"}`;
+      details += `\nTarget language: ${this.videoData.responseLanguage || "N/A"}`;
+      details += `\nDuration: ${this.videoData.duration || "N/A"}s`;
+    }
+
+    // Show in a new window for easy copying
+    const errorWindow = window.open("", "_blank", "width=600,height=400");
+    if (errorWindow) {
+      errorWindow.document.write(`
+        <html>
+          <head><title>VOT Error Details</title></head>
+          <body style="font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4;">
+            <h2 style="color: #f48771;">Translation Error Details</h2>
+            <pre style="white-space: pre-wrap; word-wrap: break-word; background: #2d2d2d; padding: 15px; border-radius: 5px;">${details.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+            <button onclick="navigator.clipboard.writeText(document.querySelector('pre').textContent)" style="margin-top: 10px; padding: 10px 20px; cursor: pointer;">
+              Copy to clipboard
+            </button>
+          </body>
+        </html>
+      `);
+      errorWindow.document.close();
+    } else {
+      // Fallback to alert if popup blocked
+      alert(details);
     }
   }
 
